@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 interface SearchResult {
@@ -19,6 +19,9 @@ function App() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
   const [darkMode, setDarkMode] = useState(false);
+  
+  // Reference for search result elements
+  const searchResultRefs = useRef<Record<string, HTMLElement | null>>({});
 
   // Process JSON when input changes
   useEffect(() => {
@@ -42,6 +45,7 @@ function App() {
   useEffect(() => {
     if (!searchQuery.trim() || !parsedJson) {
       setSearchResults([]);
+      setCurrentSearchIndex(-1);
       return;
     }
 
@@ -199,6 +203,84 @@ function App() {
     
     return siblings;
   };
+  
+  // Expand all parent paths of a given path to make it visible
+  const expandParentPaths = (path: string) => {
+    const parts = path.split('.');
+    let currentPath = '';
+    const updates: Record<string, boolean> = {};
+    
+    // Expand each parent path
+    for (let i = 0; i < parts.length; i++) {
+      currentPath += (currentPath ? '.' : '') + parts[i];
+      updates[currentPath] = true;
+    }
+    
+    setExpandedSections(prev => ({
+      ...prev,
+      ...updates
+    }));
+  };
+  
+  // Effect to handle search result navigation
+  useEffect(() => {
+    if (currentSearchIndex >= 0 && searchResults.length > 0) {
+      const result = searchResults[currentSearchIndex];
+      
+      // Expand all parent paths immediately to make the result visible
+      expandParentPaths(result.path);
+      
+      // Scroll to the element after a short delay to allow rendering
+      setTimeout(() => {
+        const element = searchResultRefs.current[result.path];
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Add a highlight effect
+          element.classList.add('search-highlight');
+          setTimeout(() => element.classList.remove('search-highlight'), 2000);
+        }
+      }, 100);
+    }
+  }, [currentSearchIndex, searchResults]);
+  
+  // Effect to expand parents and scroll to search result when currentSearchIndex changes
+  useEffect(() => {
+    if (currentSearchIndex >= 0 && searchResults.length > 0) {
+      const result = searchResults[currentSearchIndex];
+      
+      // Expand all parent paths to make the result visible
+      const expandParentPaths = (path: string) => {
+        const parts = path.split('.');
+        let currentPath = '';
+        const updates: Record<string, boolean> = {};
+        
+        // Expand each parent path
+        for (let i = 0; i < parts.length; i++) {
+          currentPath += (currentPath ? '.' : '') + parts[i];
+          updates[currentPath] = true;
+        }
+        
+        setExpandedSections(prev => ({
+          ...prev,
+          ...updates
+        }));
+      };
+      
+      // Expand parent paths immediately
+      expandParentPaths(result.path);
+      
+      // Scroll to the element after a short delay to allow rendering
+      setTimeout(() => {
+        const element = searchResultRefs.current[result.path];
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Highlight the element briefly
+          element.classList.add('search-highlight');
+          setTimeout(() => element.classList.remove('search-highlight'), 2000);
+        }
+      }, 100);
+    }
+  }, [currentSearchIndex, searchResults]);
 
   // Finds the path up to a particular array index
   const getPathUpToIndex = (path: string, indexPosition: number): string => {
@@ -391,6 +473,46 @@ function App() {
     }
   };
 
+
+
+  // Helper function to expand all parents of a path
+  const expandPathParents = (path: string) => {
+    const parts = path.split('.');
+    let currentPath = '';
+    const updates: Record<string, boolean> = {};
+    
+    // Expand each parent path
+    for (let i = 0; i < parts.length; i++) {
+      currentPath += (currentPath ? '.' : '') + parts[i];
+      updates[currentPath] = true;
+    }
+    
+    setExpandedSections(prev => ({
+      ...prev,
+      ...updates
+    }));
+  };
+  
+  // Effect to scroll to and highlight the current search result
+  useEffect(() => {
+    if (currentSearchIndex >= 0 && searchResults.length > 0) {
+      const result = searchResults[currentSearchIndex];
+      
+      // Expand all parent paths to make the result visible
+      expandPathParents(result.path);
+      
+      // Scroll to the element after a short delay to allow rendering
+      setTimeout(() => {
+        const element = searchResultRefs.current[result.path];
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.classList.add('search-highlight');
+          setTimeout(() => element.classList.remove('search-highlight'), 2000);
+        }
+      }, 100);
+    }
+  }, [currentSearchIndex, searchResults]);
+
   const navigateToNextResult = () => {
     if (searchResults.length === 0) return;
     setCurrentSearchIndex(prev => (prev + 1) % searchResults.length);
@@ -415,58 +537,163 @@ function App() {
       return <span className="text-green-600">"{value}"</span>;
     }
     return String(value);
-  };
-
-  const renderJSON = (obj: any, path = '', level = 0): React.ReactNode => {
-    if (obj === null) return <span className="text-gray-500">null</span>;
-    if (typeof obj !== 'object') {
-      return <>{renderValue(obj)}</>;
+  }
+    
+    // Create an object with the updates
+    const updates: Record<string, boolean> = {};
+    
+    // For 'Open Similar', include current path. For 'Close Similar', exclude it
+    if (expand) {
+      updates[path] = expand;
+      
+      // Ensure all parent paths are expanded
+      ensureParentPathsExpanded(path, updates);
     }
+    
+    // Add all similar structure paths to the updates
+    similarPaths.forEach(p => {
+      updates[p] = expand;
+      
+      // If expanding, also expand all parent paths
+      if (expand) {
+        ensureParentPathsExpanded(p, updates);
+      }
+    });
+    
+    // Update the expanded sections state
+    setExpandedSections(prev => ({
+      ...prev,
+      ...updates
+    }));
+    
+    console.log(`Toggling ${similarPaths.length} similar paths to ${expand ? 'expanded' : 'collapsed'}`);
+  } else {
+    // Create an object with the updates
+    const updates: Record<string, boolean> = {};
+    
+    // For 'Open Similar', include current path. For 'Close Similar', exclude it
+    if (expand) {
+      updates[path] = expand;
+      
+      // Ensure all parent paths are expanded
+      ensureParentPathsExpanded(path, updates);
+    }
+    
+    // Add all sibling paths to the updates
+    nestedSiblings.forEach(p => {
+      updates[p] = expand;
+      
+      // If expanding, also expand all parent paths
+      if (expand) {
+        ensureParentPathsExpanded(p, updates);
+      }
+    });
+    
+    // Update the expanded sections state
+    setExpandedSections(prev => ({
+      ...prev,
+      ...updates
+    }));
+    
+  }
 
-    return (
-      <div className="json-viewer-container">
-        {Object.entries(obj).map(([key, value]: [string, any]): React.ReactNode => {
-          const currentPath = path ? `${path}.${key}` : key;
-          const isObject = value && typeof value === 'object';
-          const hasSimilarItems = findSimilarStructurePaths(currentPath).length > 0;
-          const allSimilarExpanded = hasSimilarItems && findSimilarStructurePaths(currentPath).every((p: string) => expandedSections[p]);
+  return (
+    <div className="json-viewer-container">
+      {Object.entries(obj).map(([key, value]: [string, any]): React.ReactNode => {
+        const currentPath = path ? `${path}.${key}` : key;
+        const isObject = value && typeof value === 'object';
+        const hasSimilarItems = findSimilarStructurePaths(currentPath).length > 0;
+        const allSimilarExpanded = hasSimilarItems && findSimilarStructurePaths(currentPath).every((p: string) => expandedSections[p]);
 
-          return (
-            <div key={currentPath} className="json-item mb-1">
-              <div className="json-toggle">
-                {isObject && (
-                  <button
-                    onClick={() => toggleSection(currentPath)}
+        // Check if this is a current search result (key match)
+        const isCurrentKeyMatch = searchResults.some(r => 
+          r.type === 'key' && 
+          r.path === currentPath && 
+          r.value === key && 
+          searchResults.indexOf(r) === currentSearchIndex
+        );
+        
+        // Check if this is a current search result (value match)
+        const isCurrentValueMatch = typeof value === 'string' && searchResults.some(r => 
+          r.type === 'value' && 
+          r.path === currentPath && 
+          r.value === value && 
+          searchResults.indexOf(r) === currentSearchIndex
+        );
+        
+        // Check if this is any search result (key match)
+        const isAnyKeyMatch = searchResults.some(r => 
+          r.type === 'key' && 
+          r.path === currentPath && 
+          r.value === key
+        );
+        
+        // Check if this is any search result (value match)
+        const isAnyValueMatch = typeof value === 'string' && searchResults.some(r => 
+          r.type === 'value' && 
+          r.path === currentPath && 
+          r.value === value
+        );
+
+        return (
+          <div key={currentPath} className="json-item mb-1">
+            <div className="json-toggle">
+              {isObject && (
+                <button
+                  onClick={() => toggleSection(currentPath)}
+                >
+                  {expandedSections[currentPath] ? '▼' : '▶'}
+                </button>
+              )}
+            </div>
+            <div className="json-key-value">
+              <div className="json-key">
+                <span 
+                  ref={el => {
+                    // Store reference to this element if it's a search result
+                    const isValueMatch = typeof value === 'string' && searchResults.some(r => 
+                      r.type === 'value' && 
+                      r.path === currentPath && 
+                      r.value === value
+                    );
+                    if (isValueMatch) {
+                      searchResultRefs.current[currentPath] = el;
+                    }
+                  }}
+                  className={`ml-1 ${typeof value === 'string' && searchResults.some(r => 
+                    r.type === 'value' && 
+                    r.path === currentPath && 
+                    r.value === value && 
+                    searchResults.indexOf(r) === currentSearchIndex) ? 'search-result-current' : ''}`}
+                >
+                  {renderValue(value)}
+                </span>
+                      >
+                        {Array.isArray(value) ? '[...]' : '{...}'}
+                      </button>
+                    ) : (
+                      <button
+                        className="similar-toggle"
+                        onClick={() => toggleSimilarStructures(currentPath, !allSimilarExpanded)}
+                      >
+                        {allSimilarExpanded ? 'Close Similar' : 'Open Similar'}
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <span 
+                    ref={el => {
+                      // Store reference to this element if it's a search result
+                      if (isAnyValueMatch) {
+                        searchResultRefs.current[currentPath] = el;
+                      }
+                    }}
+                    className={`ml-1 ${isCurrentValueMatch ? 'search-result-current' : ''}`}
                   >
-                    {expandedSections[currentPath] ? '▼' : '▶'}
-                  </button>
-                )}
-              </div>
-              <div className="json-key-value">
-                <div className="json-key">
-                  <span className="highlight-name">{key}</span>
-                  <span className="mx-1">:</span>
-                  {isObject ? (
-                    <>
-                      {!expandedSections[currentPath] ? (
-                        <button 
-                          className="text-gray-500 ml-1"
-                          onClick={() => toggleSection(currentPath)}
-                        >
-                          {Array.isArray(value) ? '[...]' : '{...}'}
-                        </button>
-                      ) : (
-                        // Always show the similar button for expanded objects
-                        <button
-                          className="similar-toggle"
-                          onClick={() => toggleSimilarStructures(currentPath, !allSimilarExpanded)}
-                        >
-                          {allSimilarExpanded ? 'Close Similar' : 'Open Similar'}
-                        </button>
-                      )}
-                    </>
-                  ) : (
-                    <span className="ml-1">{renderValue(value)}</span>
+                    {renderValue(value)}
+                  </span>
+                      {renderValue(value)}
+                    </span>
                   )}
                 </div>
                 {isObject && expandedSections[currentPath] && (

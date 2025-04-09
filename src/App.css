@@ -1,3 +1,57 @@
+/* Custom styles that work with Tailwind */
+
+/* Search result highlighting styles */
+.search-highlight {
+  animation: highlight-pulse 2s ease-in-out;
+}
+
+@keyframes highlight-pulse {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(252, 211, 77, 0.5); /* yellow-300 at 50% opacity */ }
+}
+
+.search-result-current {
+  background-color: rgba(252, 211, 77, 0.8); /* yellow-300 at 80% opacity */
+  border-radius: 2px;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
+}
+
+.highlight-name {
+  @apply font-semibold text-purple-700 dark:text-purple-400;
+}
+
+.json-viewer-container {
+  @apply w-full overflow-auto;
+}
+
+.json-item {
+  @apply flex items-start;
+}
+
+.json-toggle {
+  @apply mr-2 w-4 text-center flex-shrink-0 cursor-pointer;
+}
+
+.json-key-value {
+  @apply flex flex-col relative;
+}
+
+.json-key {
+  @apply flex items-center;
+}
+
+.json-children {
+  @apply pl-6 w-full;
+}
+
+.similar-toggle {
+  @apply ml-2 text-xs px-2 py-0.5 rounded bg-blue-500 text-white font-bold cursor-pointer hover:bg-blue-600 opacity-0 transition-opacity duration-200;
+}
+
+.json-key:hover .similar-toggle {
+  @apply opacity-100;
+}
+
 .App {
   text-align: center;
 }
