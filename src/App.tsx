@@ -19,6 +19,9 @@ function App() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
   const [darkMode, setDarkMode] = useState(false);
+  
+  // Reference for search result elements
+  const searchResultRefs = React.useRef<Record<string, HTMLElement | null>>({});
 
   // Process JSON when input changes
   useEffect(() => {
@@ -74,10 +77,9 @@ function App() {
         const currentPath = path ? `${path}.${key}` : key;
 
         // Search in keys
-        const isExactNameMatch = key === 'name';
         const matchesQuery = key.toLowerCase().includes(query);
 
-        if (isExactNameMatch || matchesQuery) {
+        if (matchesQuery) {
           const { parent } = getParent(parsedJson, currentPath);
           results.push({
             type: 'key',
@@ -85,7 +87,7 @@ function App() {
             value: key,
             parentObj: parent,
             childrenObj: value,
-            priority: isExactNameMatch ? 10 : (key === query ? 5 : 1)
+            priority: key.toLowerCase() === query ? 5 : 1
           });
         }
 
@@ -391,6 +393,49 @@ function App() {
     }
   };
 
+  // Helper function to expand all parent paths of a search result
+  const expandParentPaths = (path: string) => {
+    if (!path) return;
+    
+    const parts = path.split('.');
+    let currentPath = '';
+    const updates: Record<string, boolean> = {};
+    
+    // Expand each parent path
+    for (let i = 0; i < parts.length; i++) {
+      currentPath += (currentPath ? '.' : '') + parts[i];
+      updates[currentPath] = true;
+    }
+    
+    setExpandedSections(prev => ({
+      ...prev,
+      ...updates
+    }));
+  };
+  
+  // Effect to handle navigation through search results
+  useEffect(() => {
+    if (currentSearchIndex >= 0 && searchResults.length > 0) {
+      const result = searchResults[currentSearchIndex];
+      
+      // Expand all parent paths to make the result visible
+      expandParentPaths(result.path);
+      
+      // Wait a bit for the DOM to update after expanding
+      setTimeout(() => {
+        const element = searchResultRefs.current[result.path];
+        if (element) {
+          // Scroll the element into view
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          
+          // Add a highlight effect
+          element.classList.add('search-highlight');
+          setTimeout(() => element.classList.remove('search-highlight'), 2000);
+        }
+      }, 100);
+    }
+  }, [currentSearchIndex, searchResults]);
+
   const navigateToNextResult = () => {
     if (searchResults.length === 0) return;
     setCurrentSearchIndex(prev => (prev + 1) % searchResults.length);
@@ -412,6 +457,8 @@ function App() {
       return <span className="text-blue-600">{value}</span>;
     }
     if (typeof value === 'string') {
+      // String rendering is now handled directly in the JSON rendering component
+      // to allow for selective highlighting of content without quotes
       return <span className="text-green-600">"{value}"</span>;
     }
     return String(value);
@@ -444,7 +491,23 @@ function App() {
               </div>
               <div className="json-key-value">
                 <div className="json-key">
-                  <span className="highlight-name">{key}</span>
+                  <span 
+                    ref={el => {
+                      // Store reference to this element if it's a key search result
+                      const isKeyMatch = searchResults.some(r => 
+                        r.type === 'key' && r.path === currentPath && r.value === key
+                      );
+                      if (isKeyMatch && el) {
+                        searchResultRefs.current[currentPath] = el;
+                      }
+                    }}
+                    className={`highlight-name ${searchResults.some(r => 
+                      r.type === 'key' && 
+                      r.path === currentPath && 
+                      r.value === key && 
+                      searchResults.indexOf(r) === currentSearchIndex
+                    ) ? 'search-result-current' : ''}`}
+                  >{key}</span>
                   <span className="mx-1">:</span>
                   {isObject ? (
                     <>
@@ -466,7 +529,33 @@ function App() {
                       )}
                     </>
                   ) : (
-                    <span className="ml-1">{renderValue(value)}</span>
+                    typeof value === 'string' ? (
+                      <span className="ml-1 text-green-600">
+                        <span className="quote">"</span>
+                        <span 
+                          ref={el => {
+                            // Store reference to this element if it's a value search result
+                            const isValueMatch = searchResults.some(r => 
+                              r.type === 'value' && r.path === currentPath && r.value === value
+                            );
+                            if (isValueMatch && el) {
+                              searchResultRefs.current[currentPath] = el;
+                            }
+                          }}
+                          className={`${searchResults.some(r => 
+                            r.type === 'value' && 
+                            r.path === currentPath && 
+                            r.value === value && 
+                            searchResults.indexOf(r) === currentSearchIndex
+                          ) ? 'search-result-current' : ''}`}
+                        >
+                          {value}
+                        </span>
+                        <span className="quote">"</span>
+                      </span>
+                    ) : (
+                      <span className="ml-1">{renderValue(value)}</span>
+                    )
                   )}
                 </div>
                 {isObject && expandedSections[currentPath] && (
