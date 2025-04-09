@@ -75,7 +75,8 @@ function App() {
 
       Object.entries(obj).forEach(([key, value]) => {
         const currentPath = path ? `${path}.${key}` : key;
-
+        
+        // Only search in the actual key name, not the full path
         // Search in keys
         const matchesQuery = key.toLowerCase().includes(query);
 
@@ -91,17 +92,23 @@ function App() {
           });
         }
 
-        // Search in values
-        if (typeof value === 'string' && value.toLowerCase().includes(query)) {
-          const { parent } = getParent(parsedJson, currentPath);
-          results.push({
-            type: 'value',
-            path: currentPath,
-            value: value,
-            parentObj: parent,
-            childrenObj: null,
-            priority: value === query ? 5 : 1
-          });
+        // Search in values - ensure we're only matching the exact value
+        if (typeof value === 'string') {
+          // Check if the string value contains the search query
+          // Without including the path or other properties
+          const valueContainsQuery = value.toLowerCase().includes(query);
+          
+          if (valueContainsQuery) {
+            const { parent } = getParent(parsedJson, currentPath);
+            results.push({
+              type: 'value',
+              path: currentPath, 
+              value: value,
+              parentObj: parent,
+              childrenObj: null,
+              priority: value.toLowerCase() === query ? 5 : 1
+            });
+          }
         }
 
         // Recursively search in nested objects
@@ -448,7 +455,32 @@ function App() {
     );
   };
 
-  const renderValue = (value: any): React.ReactNode => {
+  // Helper function to highlight search matches within a string
+const highlightSearchMatch = (text: string, query: string): React.ReactNode => {
+  if (!query || !text.toLowerCase().includes(query.toLowerCase())) {
+    return text;
+  }
+  
+  const lowerText = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const matchIndex = lowerText.indexOf(lowerQuery);
+  
+  if (matchIndex === -1) return text;
+  
+  const beforeMatch = text.substring(0, matchIndex);
+  const match = text.substring(matchIndex, matchIndex + query.length);
+  const afterMatch = text.substring(matchIndex + query.length);
+  
+  return (
+    <>
+      {beforeMatch}
+      <span className="search-result-current">{match}</span>
+      {afterMatch}
+    </>
+  );
+};
+
+const renderValue = (value: any): React.ReactNode => {
     if (value === null) return <span className="text-gray-500">null</span>;
     if (typeof value === 'boolean') {
       return <span className="text-purple-600">{value.toString()}</span>;
@@ -457,8 +489,7 @@ function App() {
       return <span className="text-blue-600">{value}</span>;
     }
     if (typeof value === 'string') {
-      // String rendering is now handled directly in the JSON rendering component
-      // to allow for selective highlighting of content without quotes
+      // For non-search contexts, just render the string with quotes
       return <span className="text-green-600">"{value}"</span>;
     }
     return String(value);
@@ -501,12 +532,7 @@ function App() {
                         searchResultRefs.current[currentPath] = el;
                       }
                     }}
-                    className={`highlight-name ${searchResults.some(r => 
-                      r.type === 'key' && 
-                      r.path === currentPath && 
-                      r.value === key && 
-                      searchResults.indexOf(r) === currentSearchIndex
-                    ) ? 'search-result-current' : ''}`}
+                    className={`highlight-name`}
                   >{key}</span>
                   <span className="mx-1">:</span>
                   {isObject ? (
@@ -532,7 +558,7 @@ function App() {
                     typeof value === 'string' ? (
                       <span className="ml-1 text-green-600">
                         <span className="quote">"</span>
-                        <span 
+                        <span
                           ref={el => {
                             // Store reference to this element if it's a value search result
                             const isValueMatch = searchResults.some(r => 
@@ -542,14 +568,15 @@ function App() {
                               searchResultRefs.current[currentPath] = el;
                             }
                           }}
-                          className={`${searchResults.some(r => 
+                        >
+                          {searchQuery && searchResults.some(r => 
                             r.type === 'value' && 
                             r.path === currentPath && 
-                            r.value === value && 
-                            searchResults.indexOf(r) === currentSearchIndex
-                          ) ? 'search-result-current' : ''}`}
-                        >
-                          {value}
+                            r.value === value
+                          ) ? 
+                            highlightSearchMatch(value, searchQuery) : 
+                            value
+                          }
                         </span>
                         <span className="quote">"</span>
                       </span>
